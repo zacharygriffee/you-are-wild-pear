@@ -1,0 +1,94 @@
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const path = require('node:path')
+const test = require('node:test')
+const vm = require('node:vm')
+
+const root = path.resolve(__dirname, '..')
+
+function loadBridge() {
+  let exposed
+  const calls = []
+  const source = fs.readFileSync(path.join(root, 'electron', 'preload.js'), 'utf8')
+  vm.runInNewContext(source, {
+    require(name) {
+      assert.equal(name, 'electron')
+      return {
+        contextBridge: {
+          exposeInMainWorld(name, api) {
+            assert.equal(name, 'yawHost')
+            exposed = api
+          }
+        },
+        ipcRenderer: {
+          invoke(channel, ...args) {
+            calls.push({ channel, args })
+            return Promise.resolve({ ok: true })
+          }
+        }
+      }
+    },
+    Object
+  })
+  return { exposed, calls }
+}
+
+function publicPaths(value, prefix = '') {
+  const result = []
+  for (const [key, child] of Object.entries(value)) {
+    const current = prefix ? `${prefix}.${key}` : key
+    result.push(current)
+    if (child && typeof child === 'object') result.push(...publicPaths(child, current))
+  }
+  return result
+}
+
+test('preload exposes only the approved bounded methods', async () => {
+  const { exposed, calls } = loadBridge()
+  assert.deepEqual(publicPaths(exposed), [
+    'capabilities',
+    'app',
+    'app.platform',
+    'distribution',
+    'distribution.status',
+    'files',
+    'files.exportSave',
+    'files.importSave',
+    'providers',
+    'providers.listProfiles',
+    'providers.createProfile',
+    'providers.replaceCredential',
+    'providers.forgetCredential',
+    'providers.test',
+    'providers.generate'
+  ])
+  const names = publicPaths(exposed).map(value => value.split('.').at(-1).toLowerCase())
+  for (const forbidden of [
+    'getapikey',
+    'getcredential',
+    'readsecret',
+    'decryptsecret',
+    'rawipc',
+    'invoke',
+    'readarbitraryfile',
+    'writearbitraryfile',
+    'electron'
+  ]) {
+    assert.equal(names.includes(forbidden), false, `public bridge contains forbidden surface ${forbidden}`)
+  }
+  await exposed.providers.generate('native-profile', { capability: 'text.generate', request: { input: {} } })
+  assert.equal(calls.at(-1).channel, 'yaw:providers:generate')
+  assert.equal(Object.isFrozen(exposed), true)
+  assert.equal(Object.isFrozen(exposed.providers), true)
+})
+
+test('Electron renderer configuration stays sandboxed without Node integration', () => {
+  const source = fs.readFileSync(path.join(root, 'electron', 'main.js'), 'utf8')
+  assert.match(source, /contextIsolation:\s*true/)
+  assert.match(source, /sandbox:\s*true/)
+  assert.match(source, /nodeIntegration:\s*false/)
+  assert.match(source, /webSecurity:\s*true/)
+  assert.match(source, /setWindowOpenHandler\(\(\)\s*=>\s*\(\{\s*action:\s*'deny'/)
+  assert.match(source, /will-navigate/)
+  assert.match(source, /will-attach-webview/)
+})

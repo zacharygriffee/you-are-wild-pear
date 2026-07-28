@@ -1,0 +1,5 @@
+node_modules/
+out/
+renderer/vendor/yaw/
+.DS_Store
+*.log

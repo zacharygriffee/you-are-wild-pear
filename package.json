@@ -1,0 +1,31 @@
+{
+  "name": "you-are-wild-pear",
+  "productName": "You Are Wild",
+  "version": "0.1.0",
+  "description": "Sandboxed Pear and Electron desktop host for You Are Wild",
+  "license": "MIT",
+  "private": true,
+  "type": "commonjs",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "npm run sync:yaw && electron-forge start -- --no-updates",
+    "start:no-sync": "electron-forge start -- --no-updates",
+    "sync:yaw": "node scripts/sync-yaw.js",
+    "verify:yaw": "node scripts/verify-yaw.js",
+    "test": "node --test test/*.test.js",
+    "check": "npm run verify:yaw && npm test",
+    "package": "npm run sync:yaw && electron-forge package --platform=linux",
+    "make": "npm run sync:yaw && electron-forge make --platform=linux"
+  },
+  "dependencies": {
+    "pear-runtime": "1.3.1"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "7.11.2",
+    "electron": "40.10.1",
+    "pear-electron-forge-maker-appimage": "2.0.0"
+  },
+  "allowScripts": {
+    "electron@40.10.1": true
+  }
+}
