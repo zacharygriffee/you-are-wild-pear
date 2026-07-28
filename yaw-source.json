@@ -13,7 +13,8 @@
     "pearRuntime": "1.3.1",
     "electronForge": "7.11.2",
     "appImageMaker": "2.0.0",
-    "nodeValidated": "22.22.2",
-    "bareValidated": "1.28.6"
+    "pearCliValidated": "3.0.1",
+    "nodeValidated": "24.14.1",
+    "bareValidated": "1.30.3"
   }
 }

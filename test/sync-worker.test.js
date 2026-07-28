@@ -33,6 +33,7 @@ test('Pear worker startup reports a non-seeding runtime status', async () => {
   fake.destroy = () => {}
   const worker = new WorkerStatus({
     storagePath: '/tmp/yaw-worker-test',
+    frame: stream => stream,
     run(specifier, args) {
       assert.equal(specifier, path.join(root, 'workers', 'main.js'))
       assert.deepEqual(args, ['/tmp/yaw-worker-test'])
@@ -49,4 +50,13 @@ test('Pear worker startup reports a non-seeding runtime status', async () => {
   assert.equal(status.bareVersion, 'test-bare')
   assert.deepEqual(status.distribution, { mode: 'not-configured' })
   worker.stop()
+})
+
+test('Forge keeps and prunes the native prebuilds required by Pear Runtime', () => {
+  const forge = require('../forge.config')
+  assert.deepEqual(forge.plugins.map(plugin => plugin.name), [
+    'electron-forge-plugin-universal-prebuilds',
+    'electron-forge-plugin-prune-prebuilds'
+  ])
+  assert.equal(packageJson.dependencies['framed-stream'], '1.0.1')
 })

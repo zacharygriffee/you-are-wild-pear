@@ -51,6 +51,16 @@ test('credential store persists only encrypted material and returns redacted sna
   assert.equal(profileFile.includes(secret), false)
   const brokerRecord = await store.resolveForBroker(created.id)
   assert.equal(brokerRecord.credential, secret)
+
+  const restartedStore = new CredentialStore({
+    safeStorage: safeStorage(),
+    userDataPath: directory,
+    platform: 'linux'
+  })
+  await restartedStore.initialize()
+  assert.equal(JSON.stringify(await restartedStore.listProfiles()).includes(secret), false)
+  assert.equal((await restartedStore.resolveForBroker(created.id)).credential, secret)
+
   await store.forgetCredential(created.id)
   assert.equal((await store.listProfiles())[0].credentialPresent, false)
 })

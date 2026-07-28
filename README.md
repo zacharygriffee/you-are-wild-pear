@@ -59,8 +59,11 @@ Responsibilities:
 | Pear Runtime | `1.3.1` |
 | Electron Forge | `7.11.2` |
 | Pear AppImage maker | `2.0.0` |
-| Node validated on this workstation | `22.22.2` |
-| Bare validated on this workstation | `1.28.6` |
+| Framed Stream | `1.0.1` |
+| Forge universal/prune prebuild plugins | `1.0.0` / `1.0.1` |
+| Pear CLI platform validated on this workstation | `3.0.1` |
+| Node validated on this workstation | `24.14.1` |
+| Global and worker Bare validated on this workstation | `1.30.3` |
 | Pinned YAW commit | See `yaw-source.json` |
 
 `package-lock.json` is authoritative for the installed dependency graph.
@@ -70,7 +73,7 @@ official template lock at the recorded template commit.
 ## Prerequisites
 
 - Linux x64 or another architecture supported by the selected Electron and Pear packages.
-- Node.js 22 and npm.
+- Node.js and npm (validated here with Node.js 24.14.1 and npm 11.16.0).
 - A graphical desktop capable of running Electron.
 - For persistent credentials: an Electron-supported Linux secret service/keyring. GNOME Keyring, KWallet, or another compatible libsecret backend must be unlocked and available.
 
@@ -125,6 +128,28 @@ If secure persistence is unavailable, the host rejects “remember securely.” 
 - use an unauthenticated local loopback endpoint.
 
 Plaintext authenticated endpoints are rejected. HTTPS remote endpoints are fixed-origin, redirects are blocked, request timeouts and response sizes are bounded, and only sanitized text/model/usage diagnostics return to the renderer.
+
+### Demonstrate the credential boundary
+
+With a compatible Linux keyring unlocked, run:
+
+```sh
+npm run demo:credential-boundary
+```
+
+This launches a real sandboxed Electron renderer, saves a random throwaway
+credential through the production preload and `CredentialStore`, destroys that
+setup renderer, and launches a fresh renderer that probes the public surface as
+module code could. It proves that the renderer receives only redacted state,
+that the credential is absent from both renderer storage and plaintext host
+files, and that a restarted main-process store can still decrypt it for broker
+use.
+
+The sanitized attestation is written to
+`out/security/credential-boundary-demo.json`. It contains no credential,
+credential hash, ciphertext, or credential path. See
+[`docs/credential-boundary-demonstration.md`](docs/credential-boundary-demonstration.md)
+for the precise claim and its honest setup-time limitation.
 
 ## Tests
 

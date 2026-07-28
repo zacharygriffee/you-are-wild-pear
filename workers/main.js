@@ -1,3 +1,6 @@
+const FramedStream = require('framed-stream')
+
+const IPC = new FramedStream(Bare.IPC)
 const message = {
   type: 'yaw:worker-ready',
   runtime: 'pear',
@@ -5,8 +8,8 @@ const message = {
   distribution: { mode: 'not-configured' }
 }
 
-Bare.IPC.write(JSON.stringify(message))
+IPC.write(JSON.stringify(message))
 
 Bare.on('beforeExit', () => {
-  Bare.IPC?.end()
+  IPC.end()
 })

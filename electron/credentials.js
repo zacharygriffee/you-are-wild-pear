@@ -27,8 +27,9 @@ class CredentialStore {
     ])
     for (const profile of profiles) {
       try {
-        const normalized = validateProfileInput(profile)
-        const id = validateProfileId(profile.id)
+        const { id: rawId, ...input } = profile
+        const normalized = validateProfileInput(input)
+        const id = validateProfileId(rawId)
         this.profiles.set(id, { id, ...normalized })
       } catch {}
     }
