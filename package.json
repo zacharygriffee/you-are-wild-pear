@@ -3,6 +3,7 @@
   "productName": "You Are Wild",
   "version": "0.1.0",
   "description": "Sandboxed Pear and Electron desktop host for You Are Wild",
+  "author": "Zachary Griffee",
   "license": "MIT",
   "private": true,
   "type": "commonjs",

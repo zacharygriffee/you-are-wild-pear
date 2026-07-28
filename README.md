@@ -2,7 +2,12 @@
 
 This repository is the Linux native host for [You Are Wild](https://github.com/zacharygriffee/you-are-wild). The canonical game stays in the adjacent `you-are-wild` repository. This host adds a sandboxed Electron window, an embedded Pear/Bare worker, native save dialogs, main-process provider networking, and OS-backed credential storage.
 
-It is based on the current official `holepunchto/hello-pear-electron` desktop process model at commit `ad23048ae2a02ee9a0961c280e795da66a08d77d`.
+It is based on the current official
+[`holepunchto/hello-pear-electron`](https://github.com/holepunchto/hello-pear-electron)
+desktop process model at commit
+`ad23048ae2a02ee9a0961c280e795da66a08d77d`, cross-checked against the
+official Pear desktop, worker, runtime, configuration, and distributable
+documentation on 2026-07-28.
 
 ## Process architecture
 
@@ -30,6 +35,14 @@ Electron main
             -> runtime ready/status only in this phase
 ```
 
+This phase deliberately uses the documented minimal static
+`PearRuntime.run()` worker API. The worker receives its host-selected storage
+directory as `Bare.argv[2]` and sends one small status message through
+`Bare.IPC`. It does not yet construct a worker-owned `new PearRuntime(...)`
+instance because there is no application release-line `upgrade` link and OTA
+updates are out of scope. The full constructor/updater shape belongs to the
+later distribution milestone.
+
 Responsibilities:
 
 - Electron main owns native dialogs, filesystem writes, provider HTTP authentication, credential encryption, navigation restrictions, and worker lifecycle.
@@ -51,6 +64,8 @@ Responsibilities:
 | Pinned YAW commit | See `yaw-source.json` |
 
 `package-lock.json` is authoritative for the installed dependency graph.
+The four Pear/Electron packaging versions above exactly match the current
+official template lock at the recorded template commit.
 
 ## Prerequisites
 
@@ -139,6 +154,19 @@ Forge writes build output under `out/`. The AppImage maker places the distributa
 
 This phase does not include code signing. Test the AppImage on a clean Linux VM before broader distribution.
 
+The repository intentionally has no `package.json` `upgrade` field yet.
+Current Pear configuration stores application staging fields in `package.json`;
+`pear.json` is reserved for a future multisig quorum configuration. Do not add
+a placeholder release link or a custom distribution-status object there.
+Runtime status remains the bounded
+`{ mode: "not-configured" }` worker response until a real release line is
+created.
+
+The current development AppImage still uses default Electron branding because
+a canonical square You Are Wild application icon has not been selected. Before
+public distribution, add the final Linux icon under `build/`, configure it in
+Forge and the AppImage maker, and rerun the clean-VM launch check.
+
 To remove a development checkout, close the app and remove this repository and its generated `out/` directory. Electron user data is stored under the platform application-data directory for `You Are Wild`; remove that directory separately only if you also intend to delete local profiles and encrypted credentials.
 
 ## Current non-goals
@@ -153,3 +181,11 @@ Not implemented:
 - a hostile-code-complete mod sandbox.
 
 The next recommended milestone is consent-aware Pear application staging and seeding, independent of Omega or any mesh bridge.
+
+## Official Pear references
+
+- [Pear desktop application architecture](https://docs.pears.com/explanation/pear-desktop-architecture/)
+- [Workers and the Bare IPC contract](https://docs.pears.com/explanation/workers/)
+- [Pear Runtime API](https://docs.pears.com/reference/pear/runtime/)
+- [Pear application configuration](https://docs.pears.com/reference/pear/configuration/)
+- [Build desktop distributables](https://docs.pears.com/how-to/operate-an-app/build-and-package/build-desktop-distributables/)
