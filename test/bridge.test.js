@@ -57,7 +57,7 @@ test('preload exposes only the approved bounded methods', async () => {
     'providers',
     'providers.listProfiles',
     'providers.createProfile',
-    'providers.replaceCredential',
+    'providers.configureCredential',
     'providers.forgetCredential',
     'providers.test',
     'providers.generate'
@@ -66,6 +66,7 @@ test('preload exposes only the approved bounded methods', async () => {
   for (const forbidden of [
     'getapikey',
     'getcredential',
+    'replacecredential',
     'readsecret',
     'decryptsecret',
     'rawipc',
@@ -82,6 +83,36 @@ test('preload exposes only the approved bounded methods', async () => {
   assert.equal(Object.isFrozen(exposed.providers), true)
 })
 
+test('trusted credential preload exposes only its one-purpose methods', async () => {
+  let exposed
+  const calls = []
+  const source = fs.readFileSync(path.join(root, 'electron', 'credential-preload.js'), 'utf8')
+  vm.runInNewContext(source, {
+    require(name) {
+      assert.equal(name, 'electron')
+      return {
+        contextBridge: {
+          exposeInMainWorld(name, api) {
+            assert.equal(name, 'yawCredential')
+            exposed = api
+          }
+        },
+        ipcRenderer: {
+          invoke(channel, ...args) {
+            calls.push({ channel, args })
+            return Promise.resolve({ ok: true })
+          }
+        }
+      }
+    },
+    Object
+  })
+  assert.deepEqual(publicPaths(exposed), ['context', 'submit', 'cancel'])
+  await exposed.submit('transient-secret', { persist: true })
+  assert.equal(calls.at(-1).channel, 'yaw:credential-window:submit')
+  assert.equal(Object.isFrozen(exposed), true)
+})
+
 test('Electron renderer configuration stays sandboxed without Node integration', () => {
   const source = fs.readFileSync(path.join(root, 'electron', 'main.js'), 'utf8')
   assert.match(source, /contextIsolation:\s*true/)
@@ -91,4 +122,10 @@ test('Electron renderer configuration stays sandboxed without Node integration',
   assert.match(source, /setWindowOpenHandler\(\(\)\s*=>\s*\(\{\s*action:\s*'deny'/)
   assert.match(source, /will-navigate/)
   assert.match(source, /will-attach-webview/)
+  const credentialSource = fs.readFileSync(path.join(root, 'electron', 'credential-window.js'), 'utf8')
+  assert.match(credentialSource, /contextIsolation:\s*true/)
+  assert.match(credentialSource, /sandbox:\s*true/)
+  assert.match(credentialSource, /nodeIntegration:\s*false/)
+  assert.match(credentialSource, /devTools:\s*false/)
+  assert.match(credentialSource, /partition:\s*`yaw-trusted-credential-/)
 })

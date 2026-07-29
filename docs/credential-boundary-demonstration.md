@@ -9,18 +9,21 @@ npm run demo:credential-boundary
 The command creates a random throwaway provider credential and temporary
 credential directory. It then:
 
-1. starts a sandboxed Electron renderer with the production preload;
-2. submits the credential through the same bounded setup method used by the
-   core provider UI;
-3. persists it with the real Electron `safeStorage` backend;
-4. destroys the entire setup renderer;
-5. starts a fresh renderer that represents executable module code;
-6. recursively inspects the public bridge and attempts the known secret/raw
+1. starts the sandboxed game renderer with the production preload;
+2. creates only non-secret provider metadata from that renderer;
+3. asks Electron main to open the dedicated trusted credential window using an
+   opaque profile ID;
+4. enters the key only in that separate renderer process;
+5. persists it with the real Electron `safeStorage` backend;
+6. keeps the original game renderer alive and probes it as executable module
+   code could;
+7. confirms the two windows use different renderer process IDs;
+8. recursively inspects the public game bridge and attempts the known secret/raw
    IPC/file escape-hatch names;
-7. confirms Node, Electron, and raw IPC globals are absent;
-8. confirms profile snapshots and renderer storage contain no credential;
-9. confirms neither host file contains the plaintext credential;
-10. creates a fresh main-process credential-store instance and proves that only
+9. confirms Node, Electron, and raw IPC globals are absent;
+10. confirms profile snapshots and game-renderer storage contain no credential;
+11. confirms neither host file contains the plaintext credential;
+12. creates a fresh main-process credential-store instance and proves that only
     the broker-side resolver can decrypt the saved credential.
 
 On success it prints a redacted attestation and writes the same data to:
@@ -40,7 +43,8 @@ GNOME/libsecret or KWallet.
 
 ## What this proves
 
-After setup, executable code in the YAW renderer can see only:
+Before, during, and after setup, executable code in the YAW renderer can see
+only:
 
 - an opaque profile ID;
 - display-safe provider metadata;
@@ -51,16 +55,14 @@ It cannot retrieve the plaintext credential, encrypted credential record,
 credential file, Electron object, raw IPC primitive, or Node filesystem API.
 Electron main can decrypt the credential solely for the provider broker.
 
-## Honest limit
+## Trusted entry window
 
-This is a post-save custody proof, not a hostile-code-complete renderer
-sandbox. During an explicit core-owned setup or replacement action, the player
-types a credential into the renderer and passes it transiently over the bounded
-bridge. Executable module code running at that exact moment may be able to
-inspect renderer values or UI events.
+The credential entry renderer loads three fixed local assets and a separate
+preload. It has an in-memory session partition, no game or module scripts, no
+Node integration, no DevTools, denied permissions and navigation, and only
+three bridge methods: read redacted context, submit a credential, or cancel.
+The profile ID remains in Electron main and is not exposed to this renderer.
 
-The current policy therefore treats installed modules as trusted-local code and
-does not expose any credential-management method through `MODS`. A later
-hardening milestone can move credential entry into a dedicated trusted window
-that never loads YAW or module code. That is required before claiming protection
-from a deliberately malicious module during credential entry.
+This closes the setup-time observation gap for game modules. It does not attempt
+to defend against a compromised Electron main process, operating system,
+keylogger, debugger, or malicious replacement of the packaged application.

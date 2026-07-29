@@ -29,6 +29,13 @@ Sandboxed Electron renderer
             -> provider broker
             -> Pear worker status
 
+Core provider UI
+    -> configureCredential(opaque profile ID)
+        -> Electron main opens fixed local trusted modal
+            -> dedicated credential preload accepts key
+                -> main-process credential store
+                    -> safeStorage or session-only memory
+
 Electron main
     -> PearRuntime.run(workers/main.js)
         -> Bare worker
@@ -46,8 +53,9 @@ later distribution milestone.
 Responsibilities:
 
 - Electron main owns native dialogs, filesystem writes, provider HTTP authentication, credential encryption, navigation restrictions, and worker lifecycle.
-- Preload exposes only the documented semantic methods. It has no raw IPC, Electron, shell, arbitrary file, or secret-reading API.
-- The renderer is the pinned hosted YAW build with `sandbox: true`, `contextIsolation: true`, and `nodeIntegration: false`.
+- The game preload exposes only documented semantic methods. Credential setup accepts an opaque profile ID but no secret, and there is no raw IPC, Electron, shell, arbitrary file, or secret-reading API.
+- A separate fixed local credential-entry page and preload expose only redacted context, submit, and cancel operations. The profile ID remains in main, and a unique non-persistent session partition isolates this window from the game renderer.
+- Both renderers use `sandbox: true`, `contextIsolation: true`, and `nodeIntegration: false`; the game renderer contains the pinned hosted YAW build while the trusted window loads no game or module code.
 - The Bare worker reports Pear availability. Seeding and replication are deliberately not configured.
 
 ## Selected versions
@@ -119,7 +127,13 @@ Provider credentials are outside YAW save state and cannot enter save exports.
 
 ## Secure credentials
 
-Provider metadata is stored separately from encrypted credentials. Persistent secrets use Electron `safeStorage` only when encryption is available and the selected backend is not `basic_text`.
+Provider metadata is stored separately from encrypted credentials. The game
+renderer requests configuration with only an opaque profile ID. Electron main
+then opens a modal, fixed local credential-entry window in a unique
+non-persistent session partition. The key travels only across that window's
+sender-bound preload IPC to main and is never sent through the game preload.
+Persistent secrets use Electron `safeStorage` only when encryption is
+available and the selected backend is not `basic_text`.
 
 If secure persistence is unavailable, the host rejects “remember securely.” The player can:
 
@@ -137,19 +151,20 @@ With a compatible Linux keyring unlocked, run:
 npm run demo:credential-boundary
 ```
 
-This launches a real sandboxed Electron renderer, saves a random throwaway
-credential through the production preload and `CredentialStore`, destroys that
-setup renderer, and launches a fresh renderer that probes the public surface as
-module code could. It proves that the renderer receives only redacted state,
-that the credential is absent from both renderer storage and plaintext host
-files, and that a restarted main-process store can still decrypt it for broker
-use.
+This launches the real sandboxed game renderer and the separate trusted
+credential-entry renderer. It saves a random throwaway credential through the
+trusted window while the game renderer remains alive, verifies that the two
+windows use different renderer processes, then probes the game surface as
+module code could. It proves that the game renderer never receives the key,
+that only redacted state returns, that plaintext is absent from renderer
+storage and host files, and that a restarted main-process store can still
+decrypt it for broker use.
 
 The sanitized attestation is written to
 `out/security/credential-boundary-demo.json`. It contains no credential,
 credential hash, ciphertext, or credential path. See
 [`docs/credential-boundary-demonstration.md`](docs/credential-boundary-demonstration.md)
-for the precise claim and its honest setup-time limitation.
+for the precise claim and threat boundary.
 
 ## Tests
 
@@ -159,7 +174,11 @@ npm run verify:yaw
 npm run check
 ```
 
-The suite covers the preload allowlist, negative secret/IPC/file surfaces, sender validation, save bounds, encrypted credential custody, Linux `basic_text` refusal, provider URL and redirect rules, response sanitization, renderer security flags, renderer hashes, and worker startup.
+The suite covers both exact preload allowlists, trusted-window sender and
+profile-ID isolation, negative secret/IPC/file surfaces, sender validation,
+save bounds, encrypted credential custody, Linux `basic_text` refusal,
+provider URL and redirect rules, response sanitization, renderer security
+flags, renderer hashes, and worker startup.
 
 ## Linux package
 

@@ -19,6 +19,7 @@ Bare CLI and spawned status worker reported 1.30.3, and Node.js reported
 | First host argument is `Bare.argv[2]` | Main passes the application user-data Pear directory as the first argument |
 | Peer, storage, and native P2P code stays out of the renderer | The renderer exposes only the bounded `window.yawHost` preload contract |
 | Renderer remains sandboxed | `sandbox: true`, `contextIsolation: true`, and `nodeIntegration: false` |
+| Secrets stay outside the game renderer | A fixed local trusted modal uses a separate preload and unique non-persistent session partition |
 | Electron Forge creates the Linux distributable | `npm run make` uses the official Pear AppImage maker |
 | Native runtime prebuilds are packaged then platform-pruned | Forge uses the official universal-prebuild and prune-prebuild plugins |
 | `package-lock.json` fixes the resolved runtime graph | Pear Runtime 1.3.1, Electron 40.10.1, Forge 7.11.2, AppImage maker 2.0.0 |

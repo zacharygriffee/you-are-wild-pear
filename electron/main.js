@@ -2,11 +2,10 @@ const path = require('path')
 const { app, BrowserWindow, dialog, ipcMain, safeStorage, session } = require('electron')
 
 const { CredentialStore } = require('./credentials')
+const { CredentialWindow } = require('./credential-window')
 const { createFileService } = require('./files')
 const {
   publicError,
-  validateCredential,
-  validateCredentialOptions,
   validateProfileId,
   validateProfileInput,
   validateProviderRequest,
@@ -18,6 +17,7 @@ const { WorkerStatus } = require('./worker-status')
 const rendererFile = path.join(__dirname, '..', 'renderer', 'vendor', 'yaw', 'index.html')
 let mainWindow = null
 let credentials = null
+let credentialWindow = null
 let workerStatus = null
 
 function hostCapabilities() {
@@ -70,14 +70,9 @@ function registerIpc() {
     ok: true,
     profile: await credentials.createProfile(validateProfileInput(input))
   }))
-  registerHandler('yaw:providers:replace-credential', async (profileId, credential, options) => ({
-    ok: true,
-    profile: await credentials.replaceCredential(
-      validateProfileId(profileId),
-      validateCredential(credential),
-      validateCredentialOptions(options)
-    )
-  }))
+  registerHandler('yaw:providers:configure-credential', profileId => (
+    credentialWindow.open(mainWindow, validateProfileId(profileId))
+  ))
   registerHandler('yaw:providers:forget-credential', async profileId => ({
     ok: true,
     profile: await credentials.forgetCredential(validateProfileId(profileId))
@@ -137,6 +132,11 @@ if (!lock) {
       userDataPath: path.join(app.getPath('userData'), 'host-secrets')
     })
     await credentials.initialize()
+    credentialWindow = new CredentialWindow({
+      BrowserWindow,
+      ipcMain,
+      credentialStore: credentials
+    })
     workerStatus = new WorkerStatus({
       storagePath: path.join(app.getPath('userData'), 'pear')
     })
@@ -155,6 +155,7 @@ if (!lock) {
     if (process.platform !== 'darwin') app.quit()
   })
   app.on('before-quit', () => {
+    credentialWindow?.destroy()
     credentials?.clearSession()
     workerStatus?.stop()
   })

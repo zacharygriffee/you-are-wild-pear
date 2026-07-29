@@ -6,10 +6,9 @@ const path = require('node:path')
 const { app, BrowserWindow, ipcMain, safeStorage, session } = require('electron')
 
 const { CredentialStore } = require('../electron/credentials')
+const { CredentialWindow } = require('../electron/credential-window')
 const {
   publicError,
-  validateCredential,
-  validateCredentialOptions,
   validateProfileId,
   validateProfileInput,
   validateSender
@@ -20,7 +19,7 @@ const reportFile = path.join(__dirname, '..', 'out', 'security', 'credential-bou
 const channels = [
   'yaw:providers:list-profiles',
   'yaw:providers:create-profile',
-  'yaw:providers:replace-credential'
+  'yaw:providers:configure-credential'
 ]
 const tracing = process.env.YAW_CREDENTIAL_DEMO_TRACE === '1'
 
@@ -28,8 +27,7 @@ function trace(stage) {
   if (tracing) process.stderr.write(`Credential boundary stage: ${stage}\n`)
 }
 
-// Keep the short gap between the setup renderer and the fresh probe renderer
-// from terminating the demonstration on Linux and Windows.
+// Keep Electron alive during hidden-window transitions in the demonstration.
 app.on('window-all-closed', () => {})
 
 function requireProof(condition, message) {
@@ -57,7 +55,7 @@ function registerHandler(channel, handler) {
   })
 }
 
-function registerCredentialBridge(store) {
+function registerCredentialBridge(store, credentialWindow, getParent) {
   registerHandler('yaw:providers:list-profiles', async () => ({
     ok: true,
     profiles: await store.listProfiles()
@@ -66,14 +64,9 @@ function registerCredentialBridge(store) {
     ok: true,
     profile: await store.createProfile(validateProfileInput(input))
   }))
-  registerHandler('yaw:providers:replace-credential', async (profileId, credential, options) => ({
-    ok: true,
-    profile: await store.replaceCredential(
-      validateProfileId(profileId),
-      validateCredential(credential),
-      validateCredentialOptions(options)
-    )
-  }))
+  registerHandler('yaw:providers:configure-credential', profileId => (
+    credentialWindow.open(getParent(), validateProfileId(profileId))
+  ))
 }
 
 async function createProbeWindow() {
@@ -95,11 +88,9 @@ async function createProbeWindow() {
   return window
 }
 
-async function configureCredential(window, secret) {
-  const serializedSecret = JSON.stringify(secret)
+async function startCredentialConfiguration(window) {
   return window.webContents.executeJavaScript(`
     (async () => {
-      const transientCredential = ${serializedSecret}
       const created = await window.yawHost.providers.createProfile({
         name: 'Boundary demonstration',
         endpoint: 'https://api.example.test/v1',
@@ -113,18 +104,38 @@ async function configureCredential(window, secret) {
         project: ''
       })
       if (!created.ok) return created
-      const replaced = await window.yawHost.providers.replaceCredential(
-        created.profile.id,
-        transientCredential,
-        { persist: true }
-      )
       return {
-        ok: replaced.ok,
+        ok: true,
         profileId: created.profile.id,
-        error: replaced.error || null
+        configurationStarted: Boolean(
+          window.__credentialConfiguration = window.yawHost.providers.configureCredential(created.profile.id)
+        )
       }
     })()
   `, true)
+}
+
+async function submitThroughTrustedWindow(credentialWindow, secret) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const window = credentialWindow.window
+    if (window && !window.isDestroyed() && !window.webContents.isLoadingMainFrame()) {
+      const trustedProcessId = window.webContents.getOSProcessId()
+      const serializedSecret = JSON.stringify(secret)
+      await window.webContents.executeJavaScript(`
+        (() => {
+          const field = document.getElementById('credential')
+          const persist = document.getElementById('persist')
+          field.value = ${serializedSecret}
+          persist.checked = true
+          document.getElementById('credential-form').requestSubmit()
+          return true
+        })()
+      `, true)
+      return trustedProcessId
+    }
+    await new Promise(resolve => setTimeout(resolve, 25))
+  }
+  throw new Error('Trusted credential window did not become ready')
 }
 
 async function probeAsRenderer(window) {
@@ -148,6 +159,7 @@ async function probeAsRenderer(window) {
         forbiddenTypes: {
           getApiKey: typeof window.yawHost.providers.getApiKey,
           getCredential: typeof window.yawHost.providers.getCredential,
+          replaceCredential: typeof window.yawHost.providers.replaceCredential,
           readSecret: typeof window.yawHost.providers.readSecret,
           decryptSecret: typeof window.yawHost.providers.decryptSecret,
           rawIpc: typeof window.yawHost.rawIpc,
@@ -162,8 +174,8 @@ async function probeAsRenderer(window) {
 }
 
 async function run() {
-  let setupWindow
-  let probeWindow
+  let gameWindow
+  let credentialWindow
   let temporaryDirectory
   try {
     await app.whenReady()
@@ -180,22 +192,27 @@ async function run() {
     trace(`storage-${storage.backend}`)
     requireProof(storage.persistentAllowed, `Secure persistent storage is unavailable (${storage.backend})`)
 
-    registerCredentialBridge(store)
+    credentialWindow = new CredentialWindow({
+      BrowserWindow,
+      ipcMain,
+      credentialStore: store
+    })
+    registerCredentialBridge(store, credentialWindow, () => gameWindow)
     const secret = `sk-boundary-${crypto.randomBytes(32).toString('hex')}`
 
-    setupWindow = await createProbeWindow()
-    trace('setup-renderer-ready')
-    const setup = await configureCredential(setupWindow, secret)
-    trace('credential-persisted')
+    gameWindow = await createProbeWindow()
+    trace('game-renderer-ready')
+    const setup = await startCredentialConfiguration(gameWindow)
+    const gameProcessId = gameWindow.webContents.getOSProcessId()
+    const trustedProcessId = await submitThroughTrustedWindow(credentialWindow, secret)
+    const configured = await gameWindow.webContents.executeJavaScript('window.__credentialConfiguration', true)
+    trace('credential-persisted-through-trusted-window')
     requireProof(setup.ok === true, `Credential setup failed (${setup.error?.code || 'unknown'})`)
+    requireProof(configured.ok === true && configured.canceled === false, `Credential storage failed (${configured.error?.code || 'unknown'})`)
     requireProof(typeof setup.profileId === 'string', 'Credential setup did not return an opaque profile ID')
+    requireProof(gameProcessId !== trustedProcessId, 'Trusted credential entry shared the game renderer process')
 
-    // Destroy the entire setup renderer before running code that represents a mod.
-    setupWindow.destroy()
-    setupWindow = null
-    probeWindow = await createProbeWindow()
-    trace('probe-renderer-ready')
-    const rendererProbe = await probeAsRenderer(probeWindow)
+    const rendererProbe = await probeAsRenderer(gameWindow)
     trace('renderer-probed')
 
     const rendered = JSON.stringify(rendererProbe)
@@ -236,6 +253,7 @@ async function run() {
     const forbiddenNames = [
       'getApiKey',
       'getCredential',
+      'replaceCredential',
       'readSecret',
       'decryptSecret',
       'rawIpc',
@@ -248,7 +266,7 @@ async function run() {
     requireProof(forbiddenNames.every(name => !leafNames.includes(name)), 'A forbidden bridge name is public')
 
     const report = {
-      schema: 'yaw-credential-boundary-demonstration-v1',
+      schema: 'yaw-credential-boundary-demonstration-v2',
       result: 'pass',
       generatedAt: new Date().toISOString(),
       runtime: {
@@ -267,7 +285,15 @@ async function run() {
         sandboxedWithoutNodeGlobals: true,
         boundedBridgePaths: rendererProbe.paths,
         forbiddenBridgeMethodsAbsent: true,
-        localStorageContainsCredential: false
+        localStorageContainsCredential: false,
+        neverReceivedCredentialDuringSetup: true
+      },
+      trustedEntryWindow: {
+        separateRendererProcess: true,
+        loadsGameOrModuleCode: false,
+        profileIdExposedToEntryRenderer: false,
+        devToolsDisabled: true,
+        ephemeralSessionPartition: true
       },
       persistence: {
         publicProfileRedacted: true,
@@ -277,15 +303,15 @@ async function run() {
         ownerOnlyFilePermissions: true,
         mainProcessRestartDecryptionSucceeded: true
       },
-      claim: 'A persisted credential is recoverable by Electron main for broker use and is not retrievable by renderer code through the public host boundary.'
+      claim: 'Credential entry occurs in a separate trusted renderer; the game and mod-capable renderer never receives the key, while Electron main can recover it only for bounded broker use.'
     }
     await fs.mkdir(path.dirname(reportFile), { recursive: true })
     await fs.writeFile(reportFile, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 })
     trace('attestation-written')
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`)
   } finally {
-    if (setupWindow && !setupWindow.isDestroyed()) setupWindow.destroy()
-    if (probeWindow && !probeWindow.isDestroyed()) probeWindow.destroy()
+    credentialWindow?.destroy()
+    if (gameWindow && !gameWindow.isDestroyed()) gameWindow.destroy()
     for (const channel of channels) ipcMain.removeHandler(channel)
     if (temporaryDirectory) await fs.rm(temporaryDirectory, { recursive: true, force: true })
     app.quit()
