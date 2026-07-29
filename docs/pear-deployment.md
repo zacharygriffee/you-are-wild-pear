@@ -39,6 +39,12 @@ The release helper accepts no link from the command line. It always reads the
 pinned `package.json#upgrade`, and it refuses to put deployment output inside
 the source tree.
 
+The Linux AppImage must preserve the product-name basename throughout Forge
+packaging. Pear installation expects both `You Are Wild.AppImage` and
+`You Are Wild.desktop`; overriding Forge's executable name causes the desktop
+entry basename to drift and makes `pear install` reject the otherwise valid
+download.
+
 ## Operator seeding
 
 Run:
@@ -58,12 +64,24 @@ secret.
 
 ### Current validation result
 
-On 2026-07-28, `pear seed` announced the staging line at release length `3`
-and reported `firewalled false`. A concurrent install into an isolated
-temporary target on the same workstation did not discover the seeder before
-the 90-second timeout. This may be a same-host discovery limitation, but it has
-not yet been distinguished from a network-specific issue. Validate from a
-second machine and network before treating the release as remotely available.
+On 2026-07-28, version `0.1.1` was staged at:
+
+```text
+pear://0.5.xppppuik8h7kyn7qbf5mukh38s9n3tx1scx4p1r5sqxaio9zjz8o
+```
+
+A Fedora 41 x64 host running Pear `3.0.1` installed it from the unversioned
+release link while the Pop!_OS build host seeded. Pear reported one peer,
+version `0.1.1`, and the versioned link above. The installed AppImage had the
+same SHA-256 as the build artifact:
+
+```text
+1e825f2ab5b68ff05641a6b21c2951f23d3fafb5f39f708233eeac97e45bffd7
+```
+
+This confirms remote discovery, block transfer, and installation finalization.
+An interactive GUI launch and OTA replacement from `0.1.1` to a later version
+remain separate tests.
 
 ## Player-controlled peer availability
 

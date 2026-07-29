@@ -33,7 +33,7 @@ test('Pear worker startup reports configured OTA and consent-aware peer availabi
   fake.destroy = () => {}
   const worker = new WorkerStatus({
     storagePath: '/tmp/yaw-worker-test',
-    version: '0.1.0',
+    version: packageJson.version,
     upgrade: packageJson.upgrade,
     name: 'You Are Wild.AppImage',
     appPath: '/tmp/You Are Wild.AppImage',
@@ -42,7 +42,7 @@ test('Pear worker startup reports configured OTA and consent-aware peer availabi
       assert.equal(specifier, path.join(root, 'workers', 'main.js'))
       assert.deepEqual(args, [
         'true',
-        '0.1.0',
+        packageJson.version,
         packageJson.upgrade,
         'You Are Wild.AppImage',
         '/tmp/yaw-worker-test',
@@ -56,7 +56,7 @@ test('Pear worker startup reports configured OTA and consent-aware peer availabi
         bareVersion: 'test-bare',
         distribution: {
           configured: true,
-          appVersion: '0.1.0',
+          appVersion: packageJson.version,
           updatesEnabled: true,
           peerAvailabilityEnabled: false,
           peers: 0,
@@ -84,6 +84,7 @@ test('Forge keeps and prunes the native prebuilds required by Pear Runtime', () 
     'electron-forge-plugin-universal-prebuilds',
     'electron-forge-plugin-prune-prebuilds'
   ])
+  assert.equal(forge.packagerConfig.executableName, undefined)
   assert.equal(packageJson.dependencies['framed-stream'], '1.0.1')
   assert.equal(packageJson.dependencies.corestore, '7.12.0')
   assert.equal(packageJson.dependencies.hyperswarm, '4.17.0')

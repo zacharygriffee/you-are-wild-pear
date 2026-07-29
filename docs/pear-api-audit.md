@@ -64,20 +64,20 @@ The current AppImage was assembled into the documented
 `by-arch/linux-x64/app/You Are Wild.AppImage` tree and staged to:
 
 ```text
-pear://0.3.xppppuik8h7kyn7qbf5mukh38s9n3tx1scx4p1r5sqxaio9zjz8o
+pear://0.5.xppppuik8h7kyn7qbf5mukh38s9n3tx1scx4p1r5sqxaio9zjz8o
 ```
 
-`pear info` reported version `0.1.0`, release length `3`, and blob byte length
-`153062844`. A foreground `pear seed` announced the release and reported
-`firewalled false`. A same-host isolated install timed out without discovering
-the seeder, so a second-machine/network install remains a release gate.
+`pear info` reported version `0.1.1`, release length `5`, and blob byte length
+`166108677`. A Fedora 41 x64 machine running Pear `3.0.1` discovered the
+Pop!_OS seeder, transferred the release, and installed the AppImage through
+`pear install`. The remote artifact SHA-256 matched the local build.
 
 ## Remaining release gates
 
 - Select a canonical square application icon and configure the Forge packager
   and AppImage maker.
-- Test the AppImage on a clean Linux VM and document the validated environment.
-- Validate `pear install` and OTA replacement from a second machine/network.
+- Test an interactive GUI launch on a clean Linux VM.
+- Validate OTA replacement from `0.1.1` to a later version.
 - Choose production maintainers and quorum, then use provisioning and multisig
   rather than treating the stage writer as a production signer.
 - Run redundant always-online operator seeders.

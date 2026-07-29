@@ -254,7 +254,7 @@ npm run pear:seed
 `pear:build` copies the versioned Forge artifact to the exact
 `You Are Wild.AppImage` input name required by Pear v3, then writes a
 deterministic deployment tree outside the source repository at
-`../you-are-wild-pear-deploy-0.1.0`. Override it only with an explicit
+`../you-are-wild-pear-deploy-0.1.1`. Override it only with an explicit
 outside-repository path:
 
 ```sh
@@ -267,11 +267,12 @@ is a foreground operator process; keep at least one trusted, always-online
 instance running for dependable availability. More seeders improve
 availability.
 
-On the validated Pop!_OS workstation, the release staged at length `3` and the
-operator seeder announced successfully with a public DHT status. A same-host
-`pear install --to <temporary-directory>` did not discover that seeder before
-its 90-second network timeout. A second machine/network clean-install test is
-therefore still required before claiming remote install availability.
+Version `0.1.1` is staged at length `5`. Cross-machine installation was
+validated from the Pop!_OS seeder to a Fedora 41 x64 host running Pear `3.0.1`:
+the remote discovered one peer, downloaded the AppImage from this release
+link, and installed the exact `0.1.1` artifact. Its SHA-256 matched the local
+build. A preliminary same-host install had timed out, so cross-machine
+validation remains the meaningful distribution check.
 
 In the application, **Settings → AI & Integrations → Pear Desktop** opens the
 trusted host-owned window:
