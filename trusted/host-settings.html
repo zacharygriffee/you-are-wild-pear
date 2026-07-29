@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+  >
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pear Desktop Settings — You Are Wild</title>
+  <link rel="stylesheet" href="./host-settings.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Trusted desktop window</p>
+    <h1>Pear Desktop</h1>
+    <p class="boundary">These controls belong to the native host. This window does not load the game or executable mods.</p>
+
+    <section aria-labelledby="runtime-heading">
+      <h2 id="runtime-heading">Runtime</h2>
+      <dl class="status-grid">
+        <div><dt>Application</dt><dd id="app-version">Loading…</dd></div>
+        <div><dt>Pear OTA</dt><dd id="pear-version">Loading…</dd></div>
+        <div><dt>Bare</dt><dd id="bare-version">Loading…</dd></div>
+        <div><dt>Release line</dt><dd id="release-status">Loading…</dd></div>
+        <div><dt>Update state</dt><dd id="update-state">Loading…</dd></div>
+        <div><dt>Connected peers</dt><dd id="peer-count">Loading…</dd></div>
+      </dl>
+    </section>
+
+    <section aria-labelledby="updates-heading">
+      <h2 id="updates-heading">Updates</h2>
+      <label class="setting">
+        <input id="updates-enabled" type="checkbox">
+        <span><strong>Receive peer-to-peer updates</strong><small>Follow the configured Pear release line. Changing this setting takes effect after restarting the app.</small></span>
+      </label>
+      <button id="apply-update" class="primary" type="button" disabled>Apply downloaded update</button>
+    </section>
+
+    <section aria-labelledby="availability-heading">
+      <h2 id="availability-heading">Peer availability</h2>
+      <label class="setting">
+        <input id="peer-availability-enabled" type="checkbox">
+        <span><strong>Help keep this release available while the app is open</strong><small>Announce this app’s Pear release drive and serve locally cached blocks. This is opt-in, uses network and disk resources, and stops when the app closes.</small></span>
+      </label>
+      <p class="note">This is best-effort peer participation, not a replacement for an always-online operator running <code>pear seed</code>.</p>
+    </section>
+
+    <p id="message" role="status" aria-live="polite"></p>
+    <div class="actions">
+      <button id="refresh" type="button">Refresh status</button>
+      <button id="close" type="button">Close</button>
+    </div>
+  </main>
+  <script src="./host-settings.js"></script>
+</body>
+</html>

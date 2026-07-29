@@ -3,7 +3,9 @@ const { app, BrowserWindow, dialog, ipcMain, safeStorage, session } = require('e
 
 const { CredentialStore } = require('./credentials')
 const { CredentialWindow } = require('./credential-window')
+const { DistributionPreferences } = require('./distribution-preferences')
 const { createFileService } = require('./files')
+const { HostSettingsWindow } = require('./host-settings-window')
 const {
   publicError,
   validateProfileId,
@@ -13,11 +15,14 @@ const {
 } = require('./ipc-validation')
 const { ProviderBroker } = require('./provider-broker')
 const { WorkerStatus } = require('./worker-status')
+const packageJson = require('../package.json')
 
 const rendererFile = path.join(__dirname, '..', 'renderer', 'vendor', 'yaw', 'index.html')
 let mainWindow = null
 let credentials = null
 let credentialWindow = null
+let distributionPreferences = null
+let hostSettingsWindow = null
 let workerStatus = null
 
 function hostCapabilities() {
@@ -29,12 +34,14 @@ function hostCapabilities() {
     native: true,
     origin: 'app',
     capabilities: {
+      'app.host_settings': true,
       'files.export_save': true,
       'files.import_save': true,
       'providers.session_transport': true,
       'providers.secure_transport': true,
       'providers.persistent_credentials': secure.persistentAllowed,
-      'distribution.read_status': true
+      'distribution.read_status': true,
+      'distribution.peer_availability': true
     },
     credentialStorage: secure
   }
@@ -55,6 +62,7 @@ function registerIpc() {
   const files = createFileService({ dialog })
   const broker = new ProviderBroker({ credentialStore: credentials })
   registerHandler('yaw:capabilities', async () => hostCapabilities())
+  registerHandler('yaw:app:open-settings', async () => hostSettingsWindow.open(mainWindow))
   registerHandler('yaw:app:platform', async () => ({
     ok: true,
     hostId: 'pear-electron',
@@ -93,6 +101,37 @@ function registerIpc() {
     ok: true,
     result: await broker.generate(validateProfileId(profileId), validateProviderRequest(request))
   }))
+}
+
+function getAppPath() {
+  if (!app.isPackaged) return ''
+  if (process.platform === 'linux' && process.env.APPIMAGE) return process.env.APPIMAGE
+  if (process.platform === 'win32') return process.execPath
+  if (process.platform === 'darwin') return path.join(process.resourcesPath, '..', '..')
+  return process.execPath
+}
+
+function getPackagedAppName() {
+  const name = packageJson.productName || packageJson.name
+  if (process.platform === 'linux') return `${name}.AppImage`
+  if (process.platform === 'win32') return `${name}.msix`
+  if (process.platform === 'darwin') return `${name}.app`
+  return name
+}
+
+function relaunchAfterUpdate() {
+  if (process.platform === 'linux' && process.env.APPIMAGE) {
+    app.relaunch({
+      execPath: process.env.APPIMAGE,
+      args: [
+        '--appimage-extract-and-run',
+        ...process.argv.slice(1).filter(argument => argument !== '--appimage-extract-and-run')
+      ]
+    })
+  } else if (process.platform !== 'win32') {
+    app.relaunch()
+  }
+  app.quit()
 }
 
 function hardenWindow(window) {
@@ -145,11 +184,35 @@ if (!lock) {
       ipcMain,
       credentialStore: credentials
     })
+    distributionPreferences = new DistributionPreferences({
+      directory: path.join(app.getPath('userData'), 'pear')
+    })
+    const preferences = await distributionPreferences.initialize()
     workerStatus = new WorkerStatus({
-      storagePath: path.join(app.getPath('userData'), 'pear')
+      storagePath: path.join(app.getPath('userData'), 'pear'),
+      version: packageJson.version,
+      upgrade: packageJson.upgrade,
+      name: getPackagedAppName(),
+      appPath: getAppPath(),
+      updatesEnabled: preferences.updatesEnabled && !process.argv.includes('--no-updates'),
+      peerAvailabilityEnabled: preferences.peerAvailabilityEnabled
+    })
+    await workerStatus.start()
+    hostSettingsWindow = new HostSettingsWindow({
+      BrowserWindow,
+      ipcMain,
+      preferences: distributionPreferences,
+      workerStatus,
+      appInfo: {
+        version: packageJson.version,
+        platform: process.platform,
+        architecture: process.arch,
+        packaged: app.isPackaged,
+        releaseLineConfigured: /^pear:\/\/[a-z0-9]+$/i.test(String(packageJson.upgrade || ''))
+      },
+      afterUpdate: relaunchAfterUpdate
     })
     registerIpc()
-    await workerStatus.start()
     await createWindow()
   }).catch(error => {
     console.error('You Are Wild native host failed to start:', publicError(error).message)
@@ -163,6 +226,7 @@ if (!lock) {
     if (process.platform !== 'darwin') app.quit()
   })
   app.on('before-quit', () => {
+    hostSettingsWindow?.destroy()
     credentialWindow?.destroy()
     credentials?.clearSession()
     workerStatus?.stop()

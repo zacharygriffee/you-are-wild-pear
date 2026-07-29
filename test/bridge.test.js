@@ -48,6 +48,7 @@ test('preload exposes only the approved bounded methods', async () => {
   assert.deepEqual(publicPaths(exposed), [
     'capabilities',
     'app',
+    'app.openSettings',
     'app.platform',
     'distribution',
     'distribution.status',
@@ -85,6 +86,8 @@ test('preload exposes only the approved bounded methods', async () => {
   assert.equal(calls.at(-1).channel, 'yaw:providers:update-profile')
   await exposed.providers.removeProfile('native-profile')
   assert.equal(calls.at(-1).channel, 'yaw:providers:remove-profile')
+  await exposed.app.openSettings()
+  assert.equal(calls.at(-1).channel, 'yaw:app:open-settings')
   assert.equal(Object.isFrozen(exposed), true)
   assert.equal(Object.isFrozen(exposed.providers), true)
 })
@@ -119,6 +122,44 @@ test('trusted credential preload exposes only its one-purpose methods', async ()
   assert.equal(Object.isFrozen(exposed), true)
 })
 
+test('trusted Pear Desktop settings preload owns bounded distribution mutations', async () => {
+  let exposed
+  const calls = []
+  const source = fs.readFileSync(path.join(root, 'electron', 'host-settings-preload.js'), 'utf8')
+  vm.runInNewContext(source, {
+    require(name) {
+      assert.equal(name, 'electron')
+      return {
+        contextBridge: {
+          exposeInMainWorld(name, api) {
+            assert.equal(name, 'yawDesktopSettings')
+            exposed = api
+          }
+        },
+        ipcRenderer: {
+          invoke(channel, ...args) {
+            calls.push({ channel, args })
+            return Promise.resolve({ ok: true })
+          }
+        }
+      }
+    },
+    Object
+  })
+  assert.deepEqual(publicPaths(exposed), [
+    'context',
+    'setUpdatesEnabled',
+    'setPeerAvailabilityEnabled',
+    'refresh',
+    'applyUpdate',
+    'close'
+  ])
+  await exposed.setPeerAvailabilityEnabled(true)
+  assert.equal(calls.at(-1).channel, 'yaw:host-settings:set-peer-availability')
+  assert.deepEqual(calls.at(-1).args, [true])
+  assert.equal(Object.isFrozen(exposed), true)
+})
+
 test('Electron renderer configuration stays sandboxed without Node integration', () => {
   const source = fs.readFileSync(path.join(root, 'electron', 'main.js'), 'utf8')
   assert.match(source, /contextIsolation:\s*true/)
@@ -134,4 +175,10 @@ test('Electron renderer configuration stays sandboxed without Node integration',
   assert.match(credentialSource, /nodeIntegration:\s*false/)
   assert.match(credentialSource, /devTools:\s*false/)
   assert.match(credentialSource, /partition:\s*`yaw-trusted-credential-/)
+  const settingsSource = fs.readFileSync(path.join(root, 'electron', 'host-settings-window.js'), 'utf8')
+  assert.match(settingsSource, /contextIsolation:\s*true/)
+  assert.match(settingsSource, /sandbox:\s*true/)
+  assert.match(settingsSource, /nodeIntegration:\s*false/)
+  assert.match(settingsSource, /devTools:\s*false/)
+  assert.match(settingsSource, /partition:\s*`yaw-trusted-host-settings-/)
 })

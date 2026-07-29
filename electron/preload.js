@@ -5,6 +5,7 @@ const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args)
 const api = {
   capabilities: () => invoke('yaw:capabilities'),
   app: {
+    openSettings: () => invoke('yaw:app:open-settings'),
     platform: () => invoke('yaw:app:platform')
   },
   distribution: {

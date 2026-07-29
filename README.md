@@ -39,16 +39,18 @@ Core provider UI
 Electron main
     -> PearRuntime.run(workers/main.js)
         -> Bare worker
-            -> runtime ready/status only in this phase
+            -> PearRuntime updater
+            -> release-drive Corestore
+            -> Hyperswarm discovery
+                -> receive updates (default on)
+                -> serve cached release blocks (explicit opt-in)
 ```
 
-This phase deliberately uses the documented minimal static
-`PearRuntime.run()` worker API. The worker receives its host-selected storage
-directory as `Bare.argv[2]` and sends one small status message through
-`Bare.IPC`. It does not yet construct a worker-owned `new PearRuntime(...)`
-instance because there is no application release-line `upgrade` link and OTA
-updates are out of scope. The full constructor/updater shape belongs to the
-later distribution milestone.
+The Electron process starts the documented `PearRuntime.run()` Bare worker.
+That worker owns the updater, Corestore, and Hyperswarm lifecycle for the
+configured Pear release line. Structured status and a small fixed command set
+cross `Bare.IPC`; neither the game renderer nor mods receive a swarm, Corestore,
+Pear Runtime, or generic IPC object.
 
 Responsibilities:
 
@@ -56,7 +58,17 @@ Responsibilities:
 - The game preload exposes only documented semantic methods. Credential setup accepts an opaque profile ID but no secret, and there is no raw IPC, Electron, shell, arbitrary file, or secret-reading API.
 - A separate fixed local credential-entry page and preload expose only redacted context, submit, and cancel operations. The profile ID remains in main, and a unique non-persistent session partition isolates this window from the game renderer.
 - Both renderers use `sandbox: true`, `contextIsolation: true`, and `nodeIntegration: false`; the game renderer contains the pinned hosted YAW build while the trusted window loads no game or module code.
-- The Bare worker reports Pear availability. Seeding and replication are deliberately not configured.
+- The game renderer can read redacted distribution status and ask main to open
+  the trusted Pear Desktop settings window. It cannot mutate update or peer
+  settings itself.
+- The separate host-settings window controls update preference, explicit
+  opt-in peer availability, refresh, and application of a ready update. It
+  loads neither YAW nor executable mods and has a unique non-persistent
+  partition.
+- The worker joins the release discovery key as an update client when updates
+  are enabled and as a serving peer only after the player opts in. Serving is
+  best-effort while the app is open; an operator-run `pear seed` remains the
+  availability anchor.
 
 ## Selected versions
 
@@ -65,6 +77,8 @@ Responsibilities:
 | Official Pear Electron template | `ad23048ae2a02ee9a0961c280e795da66a08d77d` |
 | Electron | `40.10.1` |
 | Pear Runtime | `1.3.1` |
+| Corestore | `7.12.0` |
+| Hyperswarm | `4.17.0` |
 | Electron Forge | `7.11.2` |
 | Pear AppImage maker | `2.0.0` |
 | Framed Stream | `1.0.1` |
@@ -99,6 +113,10 @@ npm start
 `npm start` synchronizes YAW before launching. `npm run start:no-sync` is available only when the checked renderer manifest is already current.
 
 Runtime logs are written to the terminal that launched `npm start`. The provider broker never logs authorization headers or credentials. Pear worker stderr is sanitized and prefixed with `Pear worker:`.
+
+The normal development command passes `--no-updates`, so local code is not
+replaced while it is being edited. To exercise the configured release line in
+a packaged build, use the AppImage produced by `npm run make`.
 
 ## Deterministic YAW synchronization
 
@@ -210,13 +228,65 @@ Forge writes build output under `out/`. The AppImage maker places the distributa
 
 This phase does not include code signing. Test the AppImage on a clean Linux VM before broader distribution.
 
-The repository intentionally has no `package.json` `upgrade` field yet.
-Current Pear configuration stores application staging fields in `package.json`;
-`pear.json` is reserved for a future multisig quorum configuration. Do not add
-a placeholder release link or a custom distribution-status object there.
-Runtime status remains the bounded
-`{ mode: "not-configured" }` worker response until a real release line is
-created.
+## Pear deployment and seeding
+
+`package.json#upgrade` contains the project’s current staging release line:
+
+```text
+pear://xppppuik8h7kyn7qbf5mukh38s9n3tx1scx4p1r5sqxaio9zjz8o
+```
+
+This is a developer-team stage line created with `pear touch`, not a
+production provisioned multisig release. `pear.json` therefore remains absent;
+production quorum and key custody are a separate milestone.
+
+Build, inspect, stage, and seed with:
+
+```sh
+npm run make
+npm run pear:build
+npm run pear:stage:dry
+npm run pear:stage
+npm run pear:info
+npm run pear:seed
+```
+
+`pear:build` copies the versioned Forge artifact to the exact
+`You Are Wild.AppImage` input name required by Pear v3, then writes a
+deterministic deployment tree outside the source repository at
+`../you-are-wild-pear-deploy-0.1.0`. Override it only with an explicit
+outside-repository path:
+
+```sh
+YAW_PEAR_DEPLOY_PATH=/absolute/outside/path npm run pear:build
+```
+
+`pear:stage:dry` shows the intended release-drive delta without publishing.
+`pear:stage` appends that tree to the configured release drive. `pear:seed`
+is a foreground operator process; keep at least one trusted, always-online
+instance running for dependable availability. More seeders improve
+availability.
+
+On the validated Pop!_OS workstation, the release staged at length `3` and the
+operator seeder announced successfully with a public DHT status. A same-host
+`pear install --to <temporary-directory>` did not discover that seeder before
+its 90-second network timeout. A second machine/network clean-install test is
+therefore still required before claiming remote install availability.
+
+In the application, **Settings → AI & Integrations → Pear Desktop** opens the
+trusted host-owned window:
+
+- **Receive peer-to-peer updates** follows the configured release line after
+  the next restart.
+- **Help keep this release available while the app is open** is off by default
+  and explicitly opts the app into announcing and serving locally cached
+  release blocks.
+- **Connected peers** is a live count from the Bare worker, not a promise that
+  every release block is locally available.
+
+The in-app setting stops when the app closes and is not a replacement for the
+operator seeder. No Pear command execution, arbitrary release key, or swarm
+control is exposed to the game renderer.
 
 The current development AppImage still uses default Electron branding because
 a canonical square You Are Wild application icon has not been selected. Before
@@ -229,19 +299,25 @@ To remove a development checkout, close the app and remove this repository and i
 
 Not implemented:
 
-- Pear staging, provisioning, seeding, swarm joins, or background replication;
+- unattended background seeding while the application is closed;
+- production Pear provisioning, multisig release quorum, or code signing;
 - Hypercore/Corestore application data;
 - Omega or other mesh sidecars;
 - cloud saves, marketplace services, payments, entitlements, or multiplayer;
 - Windows, macOS, Android, code signing, or generalized native plugins;
 - a hostile-code-complete mod sandbox.
 
-The next recommended milestone is consent-aware Pear application staging and seeding, independent of Omega or any mesh bridge.
+The next recommended milestone is production Pear provisioning and multisig
+release governance, followed by clean-VM installation/update validation. It
+remains independent of Omega or any mesh bridge.
 
 ## Official Pear references
 
 - [Pear desktop application architecture](https://docs.pears.com/explanation/pear-desktop-architecture/)
 - [Workers and the Bare IPC contract](https://docs.pears.com/explanation/workers/)
 - [Pear Runtime API](https://docs.pears.com/reference/pear/runtime/)
+- [Pear CLI](https://docs.pears.com/reference/pear/cli/)
 - [Pear application configuration](https://docs.pears.com/reference/pear/configuration/)
 - [Build desktop distributables](https://docs.pears.com/how-to/operate-an-app/build-and-package/build-desktop-distributables/)
+- [Manual deployment](https://docs.pears.com/how-to/operate-an-app/manual-deployment/deployment/)
+- [Storage and distribution](https://docs.pears.com/explanation/storage-and-distribution/)
