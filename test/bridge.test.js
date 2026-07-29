@@ -57,6 +57,8 @@ test('preload exposes only the approved bounded methods', async () => {
     'providers',
     'providers.listProfiles',
     'providers.createProfile',
+    'providers.updateProfile',
+    'providers.removeProfile',
     'providers.configureCredential',
     'providers.forgetCredential',
     'providers.test',
@@ -79,6 +81,10 @@ test('preload exposes only the approved bounded methods', async () => {
   }
   await exposed.providers.generate('native-profile', { capability: 'text.generate', request: { input: {} } })
   assert.equal(calls.at(-1).channel, 'yaw:providers:generate')
+  await exposed.providers.updateProfile('native-profile', { name: 'Updated' })
+  assert.equal(calls.at(-1).channel, 'yaw:providers:update-profile')
+  await exposed.providers.removeProfile('native-profile')
+  assert.equal(calls.at(-1).channel, 'yaw:providers:remove-profile')
   assert.equal(Object.isFrozen(exposed), true)
   assert.equal(Object.isFrozen(exposed.providers), true)
 })

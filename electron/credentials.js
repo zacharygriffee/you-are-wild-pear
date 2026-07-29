@@ -93,6 +93,82 @@ class CredentialStore {
     return [...this.profiles.values()].map(profile => this.#snapshot(profile))
   }
 
+  async updateProfile(profileId, input) {
+    await this.initialize()
+    const id = validateProfileId(profileId)
+    const previous = this.profiles.get(id)
+    if (!previous) throw codedError('profile_unavailable', 'Provider profile is unavailable')
+    const normalized = validateProfileInput(input)
+    const credentialInvalidated = previous.endpoint !== normalized.endpoint
+    const sessionCredential = this.sessionCredentials.get(id)
+    const encryptedCredential = this.encryptedCredentials.get(id)
+
+    if (credentialInvalidated) {
+      this.sessionCredentials.delete(id)
+      this.encryptedCredentials.delete(id)
+      try {
+        await this.#persistCredentials()
+      } catch (error) {
+        if (sessionCredential !== undefined) this.sessionCredentials.set(id, sessionCredential)
+        if (encryptedCredential !== undefined) this.encryptedCredentials.set(id, encryptedCredential)
+        throw error
+      }
+    }
+
+    this.profiles.set(id, { id, ...normalized })
+    try {
+      await this.#persistProfiles()
+    } catch (error) {
+      this.profiles.set(id, previous)
+      if (credentialInvalidated) {
+        if (sessionCredential !== undefined) this.sessionCredentials.set(id, sessionCredential)
+        if (encryptedCredential !== undefined) this.encryptedCredentials.set(id, encryptedCredential)
+        try {
+          await this.#persistCredentials()
+        } catch {}
+      }
+      throw error
+    }
+    return {
+      profile: this.#snapshot(this.profiles.get(id)),
+      credentialInvalidated
+    }
+  }
+
+  async removeProfile(profileId) {
+    await this.initialize()
+    const id = validateProfileId(profileId)
+    const previous = this.profiles.get(id)
+    if (!previous) throw codedError('profile_unavailable', 'Provider profile is unavailable')
+    const sessionCredential = this.sessionCredentials.get(id)
+    const encryptedCredential = this.encryptedCredentials.get(id)
+    const credentialDeleted = sessionCredential !== undefined || encryptedCredential !== undefined
+
+    this.sessionCredentials.delete(id)
+    this.encryptedCredentials.delete(id)
+    try {
+      await this.#persistCredentials()
+    } catch (error) {
+      if (sessionCredential !== undefined) this.sessionCredentials.set(id, sessionCredential)
+      if (encryptedCredential !== undefined) this.encryptedCredentials.set(id, encryptedCredential)
+      throw error
+    }
+
+    this.profiles.delete(id)
+    try {
+      await this.#persistProfiles()
+    } catch (error) {
+      this.profiles.set(id, previous)
+      if (sessionCredential !== undefined) this.sessionCredentials.set(id, sessionCredential)
+      if (encryptedCredential !== undefined) this.encryptedCredentials.set(id, encryptedCredential)
+      try {
+        await this.#persistCredentials()
+      } catch {}
+      throw error
+    }
+    return { id, removed: true, credentialDeleted }
+  }
+
   async replaceCredential(profileId, rawCredential, rawOptions = {}) {
     await this.initialize()
     const id = validateProfileId(profileId)

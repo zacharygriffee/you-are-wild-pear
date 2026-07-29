@@ -1,7 +1,7 @@
 {
   "schema": "yaw-renderer-source-v1",
   "repository": "zacharygriffee/you-are-wild",
-  "ref": "81424f029b05f6485689bc1208f3f95ae2e34493",
+  "ref": "48563b1c7a58ae8effe5d54e4a7307851f69d595",
   "expectedVersion": "0.17.0",
   "build": "npm --prefix app run build:hosted",
   "officialPearTemplate": {

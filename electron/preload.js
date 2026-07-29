@@ -17,6 +17,8 @@ const api = {
   providers: {
     listProfiles: () => invoke('yaw:providers:list-profiles'),
     createProfile: input => invoke('yaw:providers:create-profile', input),
+    updateProfile: (profileId, input) => invoke('yaw:providers:update-profile', profileId, input),
+    removeProfile: profileId => invoke('yaw:providers:remove-profile', profileId),
     configureCredential: profileId => invoke('yaw:providers:configure-credential', profileId),
     forgetCredential: profileId => invoke('yaw:providers:forget-credential', profileId),
     test: profileId => invoke('yaw:providers:test', profileId),

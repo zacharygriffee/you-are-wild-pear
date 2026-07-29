@@ -13,6 +13,22 @@ const CONTEXT_CHANNEL = 'yaw:credential-window:context'
 const SUBMIT_CHANNEL = 'yaw:credential-window:submit'
 const CANCEL_CHANNEL = 'yaw:credential-window:cancel'
 const CHANNELS = [CONTEXT_CHANNEL, SUBMIT_CHANNEL, CANCEL_CHANNEL]
+const PROFILE_BINDING_KEYS = [
+  'name',
+  'endpoint',
+  'model',
+  'protocol',
+  'timeoutMs',
+  'maxCompletionTokens',
+  'reasoningEffort',
+  'temperature',
+  'organization',
+  'project'
+]
+
+function profileBinding(profile) {
+  return JSON.stringify(PROFILE_BINDING_KEYS.map(key => profile?.[key] ?? null))
+}
 
 class CredentialWindow {
   constructor({
@@ -48,6 +64,13 @@ class CredentialWindow {
     this.ipcMain.handle(SUBMIT_CHANNEL, async (event, credential, options) => {
       try {
         this.#validateTrustedSender(event)
+        const profiles = await this.credentialStore.listProfiles()
+        const current = profiles.find(candidate => candidate.id === this.pending.profileId)
+        if (!current || profileBinding(current) !== this.pending.profileBinding) {
+          const error = new Error('Provider settings changed while credential entry was open. Reopen credential setup and review the current endpoint.')
+          error.code = 'profile_changed'
+          throw error
+        }
         const profile = await this.credentialStore.replaceCredential(
           this.pending.profileId,
           validateCredential(credential),
@@ -58,7 +81,12 @@ class CredentialWindow {
         setImmediate(() => this.close())
         return result
       } catch (error) {
-        return { ok: false, error: publicError(error) }
+        const result = { ok: false, error: publicError(error) }
+        if (error?.code === 'profile_changed') {
+          this.#settle(result)
+          setImmediate(() => this.close())
+        }
+        return result
       }
     })
     this.ipcMain.handle(CANCEL_CHANNEL, async event => {
@@ -109,6 +137,7 @@ class CredentialWindow {
     const result = new Promise(resolve => {
       this.pending = {
         profileId,
+        profileBinding: profileBinding(profile),
         profile: {
           name: profile.name,
           endpoint: profile.endpoint,

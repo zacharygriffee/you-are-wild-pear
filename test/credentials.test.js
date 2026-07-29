@@ -83,3 +83,56 @@ test('Linux basic_text fallback rejects persistent credentials but allows explic
   assert.equal(session.secureStorage, false)
   assert.equal((await store.resolveForBroker(created.id)).credential, 'session-secret')
 })
+
+test('profile edits retain credentials except when endpoint changes, and removal deletes both records', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'yaw-profile-lifecycle-'))
+  t.after(() => fs.rm(directory, { recursive: true, force: true }))
+  const store = new CredentialStore({
+    safeStorage: safeStorage(),
+    userDataPath: directory,
+    platform: 'linux'
+  })
+  const created = await store.createProfile(profile())
+  await store.replaceCredential(created.id, 'sk-lifecycle-secret', { persist: true })
+
+  const modelUpdate = await store.updateProfile(created.id, {
+    ...profile(),
+    name: 'Renamed provider',
+    model: 'new-model',
+    protocol: 'chat'
+  })
+  assert.equal(modelUpdate.credentialInvalidated, false)
+  assert.equal(modelUpdate.profile.model, 'new-model')
+  assert.equal(modelUpdate.profile.protocol, 'chat')
+  assert.equal((await store.resolveForBroker(created.id)).credential, 'sk-lifecycle-secret')
+
+  const endpointUpdate = await store.updateProfile(created.id, {
+    ...profile(),
+    endpoint: 'https://other.example.test/v1',
+    model: 'new-model'
+  })
+  assert.equal(endpointUpdate.credentialInvalidated, true)
+  assert.equal(endpointUpdate.profile.credentialPresent, false)
+  assert.equal((await store.resolveForBroker(created.id)).credential, '')
+  assert.equal(
+    JSON.parse(await fs.readFile(path.join(directory, 'provider-credentials-v1.json'), 'utf8')).length,
+    0
+  )
+
+  await store.replaceCredential(created.id, 'sk-replacement-secret', { persist: true })
+  const removed = await store.removeProfile(created.id)
+  assert.deepEqual(removed, { id: created.id, removed: true, credentialDeleted: true })
+  assert.deepEqual(await store.listProfiles(), [])
+  await assert.rejects(
+    () => store.resolveForBroker(created.id),
+    error => error.code === 'profile_unavailable'
+  )
+  assert.equal(
+    JSON.parse(await fs.readFile(path.join(directory, 'provider-profiles-v1.json'), 'utf8')).length,
+    0
+  )
+  assert.equal(
+    JSON.parse(await fs.readFile(path.join(directory, 'provider-credentials-v1.json'), 'utf8')).length,
+    0
+  )
+})

@@ -108,3 +108,40 @@ test('trusted credential window binds the secret submission to its own sender an
   assert.equal((await openResult).ok, true)
   service.destroy()
 })
+
+test('trusted credential submission rejects a profile changed after the window opened', async () => {
+  const handlers = new Map()
+  const ipcMain = {
+    handle: (channel, handler) => handlers.set(channel, handler),
+    removeHandler: channel => handlers.delete(channel)
+  }
+  const profile = {
+    id: 'native-profile',
+    name: 'Trusted test',
+    endpoint: 'https://api.example.test/v1',
+    model: 'test-model',
+    protocol: 'responses'
+  }
+  const replacements = []
+  const credentialStore = {
+    storageStatus: () => ({ available: true, backend: 'kwallet5', secure: true, persistentAllowed: true }),
+    listProfiles: async () => [{ ...profile }],
+    replaceCredential: async (...args) => replacements.push(args)
+  }
+  const service = new CredentialWindow({
+    BrowserWindow: FakeBrowserWindow,
+    ipcMain,
+    credentialStore
+  })
+  const openResult = service.open(null, profile.id)
+  await new Promise(resolve => setImmediate(resolve))
+  const window = service.window
+  profile.endpoint = 'https://changed.example.test/v1'
+
+  const submitted = await handlers.get(SUBMIT_CHANNEL)(eventFor(window), 'must-not-land', { persist: true })
+  assert.equal(submitted.ok, false)
+  assert.equal(submitted.error.code, 'profile_changed')
+  assert.equal(replacements.length, 0)
+  assert.equal((await openResult).error.code, 'profile_changed')
+  service.destroy()
+})

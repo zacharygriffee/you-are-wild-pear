@@ -135,6 +135,16 @@ sender-bound preload IPC to main and is never sent through the game preload.
 Persistent secrets use Electron `safeStorage` only when encryption is
 available and the selected backend is not `basic_text`.
 
+Provider profiles can be renamed and their model, protocol, timeout, token
+ceiling, reasoning, temperature, organization, or project settings can be
+edited without returning the credential to the renderer. Changing an endpoint
+first deletes its session or encrypted credential, preventing an existing key
+from being redirected to a new origin. Removing a profile permanently deletes
+both its metadata and associated credential record. A trusted credential window
+is also bound to the exact profile settings it displayed; if those settings
+change while the window is open, submission is rejected and the player must
+review the current endpoint in a newly opened window.
+
 If secure persistence is unavailable, the host rejects “remember securely.” The player can:
 
 - uncheck it and use the credential for the current process session;
@@ -176,6 +186,8 @@ npm run check
 
 The suite covers both exact preload allowlists, trusted-window sender and
 profile-ID isolation, negative secret/IPC/file surfaces, sender validation,
+profile update/removal lifecycle, endpoint-change credential invalidation and
+trusted-window profile-change rejection,
 save bounds, encrypted credential custody, Linux `basic_text` refusal,
 provider URL and redirect rules, response sanitization, renderer security
 flags, renderer hashes, and worker startup.

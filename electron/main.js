@@ -70,6 +70,14 @@ function registerIpc() {
     ok: true,
     profile: await credentials.createProfile(validateProfileInput(input))
   }))
+  registerHandler('yaw:providers:update-profile', async (profileId, input) => ({
+    ok: true,
+    ...await credentials.updateProfile(validateProfileId(profileId), validateProfileInput(input))
+  }))
+  registerHandler('yaw:providers:remove-profile', async profileId => ({
+    ok: true,
+    ...await credentials.removeProfile(validateProfileId(profileId))
+  }))
   registerHandler('yaw:providers:configure-credential', profileId => (
     credentialWindow.open(mainWindow, validateProfileId(profileId))
   ))
