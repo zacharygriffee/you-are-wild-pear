@@ -1,8 +1,8 @@
 {
   "schema": "yaw-renderer-source-v1",
   "repository": "zacharygriffee/you-are-wild",
-  "ref": "1714e7643930c8fe38df4e0220a43ec121aab3cb",
-  "expectedVersion": "0.17.0",
+  "ref": "346b6a93fa5e31c44dc1ea026f355c9c9643200a",
+  "expectedVersion": "0.19.0",
   "build": "npm --prefix app run build:hosted",
   "officialPearTemplate": {
     "repository": "holepunchto/hello-pear-electron",

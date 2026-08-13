@@ -24,7 +24,7 @@ test('Pear distribution uses a real stage release line without pretending to hav
 
 test('pinned YAW renderer manifest verifies', () => {
   const output = execFileSync(process.execPath, ['scripts/verify-yaw.js'], { cwd: root, encoding: 'utf8' })
-  assert.match(output, /Verified You Are Wild 0\.17\.0 renderer/)
+  assert.match(output, /Verified You Are Wild 0\.19\.0 renderer/)
 })
 
 test('Pear worker startup reports configured OTA and consent-aware peer availability', async () => {
