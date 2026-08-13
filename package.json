@@ -1,7 +1,7 @@
 {
   "name": "you-are-wild-pear",
   "productName": "You Are Wild",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "upgrade": "pear://xppppuik8h7kyn7qbf5mukh38s9n3tx1scx4p1r5sqxaio9zjz8o",
   "description": "Sandboxed Pear and Electron desktop host for You Are Wild",
   "author": "Zachary Griffee",
